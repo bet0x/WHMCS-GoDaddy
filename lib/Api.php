@@ -19,4 +19,9 @@ class Api extends Connection
     {
     	return $this->call($url,$data,'POST',$test);
     }
+
+    public function patch($url,$data,$test = null)
+    {
+    	return $this->call($url,$data,'PATCH',$test);
+    }
 }

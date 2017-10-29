@@ -1,13 +1,9 @@
 <?php
-require_once 'lib/Api.php';
-require_once 'lib/Model/DomainPurchase.php';
-require_once 'lib/Model/Contact.php';
-
+require_once 'lib/autoloader.php';
 
 if (!defined("WHMCS")) {
     die("This file cannot be accessed directly");
 }
-
 
 function michal_MetaData()
 {
@@ -55,15 +51,23 @@ function michal_RegisterDomain($params)
 		'privacy'	=>	false	
 	);
 
-	$agree = $api->get('/v1/domains/agreements',$agreeData);
-	$accepted = array();
+	try
+	{
+		$agree = $api->get('/v1/domains/agreements',$agreeData);
+	}
+	catch(Exception $ex)
+	{
+		return array('error' => $ex->getMessage());
+	}
+
+	$consent = array();
 
 	foreach($agree as $agreement)
 	{
-		$accepted[] = $agreement->agreementKey;
+		$consent[] = $agreement->agreementKey;
 	}
 
-	$contact = new Contact();
+	$contact = new DomainContact();
 	$contact->setNameFirst($params['firstname'])
 			->setNameMiddle($params['firstname'])
 			->setNameLast($params['lastname'])
@@ -80,27 +84,114 @@ function michal_RegisterDomain($params)
 				'country'	=>	$params['countrycode']
 			));
 
-	
+	$nameServers = array();
+
+	for($i = 1;$i <= 5;$i++)
+	{
+		if($params['ns'.$i] != null)
+		{
+			$nameServers[] = $params['ns'.$i];
+		}
+	}
+
 	$domainPurchase = new DomainPurchase();
 	$domainPurchase ->setDomain($params['domainname'])
 					->setConsent(array(
-						'agreementKeys'	=> $accepted,
-						'agreedBy' 		=> '10.10.10.10',
-						'agreedAt' 		=> gmdate("Y-m-d\TH:i:s\Z")
+						'agreementKeys'	=> $consent,
+						'agreedBy' 		=> $params['original']['model']->ip,
+						'agreedAt' 		=> date("Y-m-d\TH:i:s\Z")
 					))
 					->setPeriod((int)$params['regperiod'])
-					->setNameServers(array($params['ns1'],$params['ns2'],$params['ns3'],$params['ns4'],$params['ns5']))
+					->setNameServers($nameServers)
 					->setContactRegistrant($contact)
 					->setContactAdmin($contact)
 					->setContactTech($contact)
 					->setContactBilling($contact);
-	
+
 	$domain = json_encode($domainPurchase);
 
-	$api->post('/v1/domains/purchase',$domain,1);
+	try
+	{
+		$api->post('/v1/domains/purchase',$domain,1);
+	}
+	catch(Exception $ex)
+	{
+		return array('error' => $ex->getMessage());
+	}
+
+	return 'success';
 }
 
-function michal_RenewDomain($params)
+function michal_GetNameServers($params)
+{
+	$api = new Api($params['ApiKey'],$params['ApiSecret']);
+
+	try
+	{
+		$domainInfo = $api->get('/v1/domains/',$params['domainname']);
+	}
+	catch(Exception $ex)
+	{
+		return array('error' => $ex->getMessage());
+	}
+											
+}
+
+function michal_SaveNameServers($params)
 {
 
+	$api = new Api($params['ApiKey'],$params['ApiSecret']);
+
+	try
+	{
+		$domainInfo = $api->get('/v1/domains/',$params['domainname']);
+	}
+	catch(Exception $ex)
+	{
+		return array('error' => $ex->getMessage());
+	}
+
+	$nameServers = array();
+
+	for($i = 1;$i <= 5;$i++)
+	{
+		if($params['original']['ns'.$i] != null)
+		{
+			$nameServers[] = $params['original']['ns'.$i];
+		}
+	}
+
+	$domainUpdate = new DomainUpdate();
+	$domainUpdate 	->setLocked($domainInfo->locked)
+					->setNameServers($nameServers)
+					->setRenewAuto($domainInfo->renewAuto);
+
+	$domain = json_encode($domainUpdate);
+	try
+	{
+		$api->patch('/v1/domains/'.$params['domainname'] ,$domain,1);
+	}
+	catch(Exception $ex)
+	{
+		return array('error'	=>	$ex->getMessage());
+	}
+
+	
 }
+
+function michal_GetRegistrarLock($params)
+{
+	$api = new Api($params['ApiKey'],$params['ApiSecret']);
+
+	try
+	{
+		//$domainInfo = $api->get('/v1/domains/',$params['domainname']);
+	}
+	catch(Exception $ex)
+	{
+		return array('error' => $ex->getMessage());
+	}
+
+	return $domainInfo->locked;
+}
+

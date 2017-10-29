@@ -3,14 +3,13 @@ namespace MichalZa\Registrar;
 
 class Connection{
 
-    const API_URL = 'https://api.ote-godaddy.com';
-
 	protected $curl;
-
 	protected $key;
 	protected $secret;
 
 	private $headers;
+
+	const API_URL = 'https://api.ote-godaddy.com';
 
     public function __construct($key,$secret)
     {
@@ -24,6 +23,11 @@ class Connection{
     		"Authorization: sso-key {$this->key}:{$this->secret}",
     		"Content-Type: application/json"
     	);
+    }
+
+    public function setCurlHeaders()
+    {
+    	curl_setopt($this->curl, CURLOPT_HTTPHEADER, $this->headers);
     }
 
     public function setParams($key,$secret)
@@ -50,14 +54,20 @@ class Connection{
     {
         $url = self::API_URL . $action;
 
-        if($method == 'GET' && !$data == null)
-        {     
-            $url .= '?' . http_build_query($data);
+        if($method == 'GET' && $data != null)
+        {   
+        	if(is_array($data))
+        	{
+            	$url .= '?' . http_build_query($data);
+            }
+            else
+            {
+            	$url .= $data;
+            }
         }
         
-        $this->setUrl($url);
-
-        switch ($method) {
+        switch ($method) 
+        {
             case 'GET':
                 //noting
                 break;
@@ -66,20 +76,57 @@ class Connection{
                 curl_setopt($this->curl, CURLOPT_CUSTOMREQUEST, 'POST');
                 curl_setopt($this->curl, CURLOPT_POSTFIELDS, $data);
             break;
+
+            case 'PATCH':
+                curl_setopt($this->curl, CURLOPT_CUSTOMREQUEST, 'PATCH');
+                curl_setopt($this->curl, CURLOPT_POSTFIELDS, $data);
+            break;
         }
 
-        curl_setopt($this->curl, CURLOPT_HTTPHEADER, $this->headers);
+        $this->setUrl($url);
+        $this->setCurlHeaders();
 
-        $response = curl_exec($this->curl);
-        if($test)
+        $result = curl_exec($this->curl);
+        self::checkCurl($result,$this->curl);
+
+       if($test)
         {
              echo '<pre>';
-            die(var_dump(json_decode($response)));
-        }
-        return json_decode($response);
-        //echo '<pre>';
-        //die(var_dump(json_decode($response)));
+        	die(var_dump(json_decode($result)));
+      } 
 
+        return $this->parse($result);
 
+    }
+
+    public static function checkCurl($response,$curl)
+    {
+		if(!$response)
+		{
+			throw new \Exception(curl_error($curl));
+		}  	
+    }
+
+    public function parse($json)
+    {
+    	$response = json_decode($json);
+    	return $this->checkErros($response);
+    }
+
+    public function checkErros($response)
+    {
+    	if($response->code)
+    	{
+    		if($response->message)
+    		{
+    			throw new \Exception($response->code . ' : ' . $response->message);
+    		}
+    		elseif($response->fields[0]->message)
+    		{
+    			throw new \Exception($response->code . ' : ' . $response->fields[0]->message);
+    		}
+    	}
+
+    	return $response;
     }
 }
