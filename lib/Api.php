@@ -15,13 +15,13 @@ class Api extends Connection
   		return $this->call($url,$data,'GET');  	
     }
 
-    public function post($url,$data,$test = null)
+    public function post($url,$data)
     {
-    	return $this->call($url,$data,'POST',$test);
+    	return $this->call($url,$data,'POST');
     }
 
-    public function patch($url,$data,$test = null)
+    public function patch($url,$data)
     {
-    	return $this->call($url,$data,'PATCH',$test);
+    	return $this->call($url,$data,'PATCH',1);
     }
 }

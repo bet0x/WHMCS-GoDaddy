@@ -52,6 +52,7 @@ class Connection{
 
     public function call($action, $data = null, $method = 'GET',$test = null)
     {
+
         $url = self::API_URL . $action;
 
         if($method == 'GET' && $data != null)
@@ -65,7 +66,7 @@ class Connection{
             	$url .= $data;
             }
         }
-        
+
         switch ($method) 
         {
             case 'GET':
@@ -83,17 +84,13 @@ class Connection{
             break;
         }
 
+  
+        
         $this->setUrl($url);
         $this->setCurlHeaders();
 
         $result = curl_exec($this->curl);
         self::checkCurl($result,$this->curl);
-
-       if($test)
-        {
-             echo '<pre>';
-        	die(var_dump(json_decode($result)));
-      } 
 
         return $this->parse($result);
 

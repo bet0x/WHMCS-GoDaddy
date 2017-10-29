@@ -1,6 +1,8 @@
 <?php
 require_once 'lib/autoloader.php';
 
+use WHMCS\Database\Capsule as DB;
+
 if (!defined("WHMCS")) {
     die("This file cannot be accessed directly");
 }
@@ -22,14 +24,14 @@ function michal_getConfigArray()
         ],
         'ApiKey'     => [
             'FriendlyName' => 'Api Key',
-            'Type'         => 'text',
-            'Size'         => '25',
+            'Type'         => 'password',
+            'Size'         => '50',
             'Default'      => ''
         ],
         'ApiSecret'     => [
             'FriendlyName' => 'Api Secret',
-            'Type'         => 'text',
-            'Size'         => '55',
+            'Type'         => 'password',
+            'Size'         => '50',
             'Default'      => '',
         ],
          'Test'           => array
@@ -67,21 +69,38 @@ function michal_RegisterDomain($params)
 		$consent[] = $agreement->agreementKey;
 	}
 
-	$contact = new DomainContact();
-	$contact->setNameFirst($params['firstname'])
-			->setNameMiddle($params['firstname'])
-			->setNameLast($params['lastname'])
-			->setOrganization($params['companyname'])
-			->setJobTitle($params['companyname'])
-			->setEmail($params['email'])
-			->setPhone($params['phonenumberformatted'])
-			->setAddressMailing(array(
-				'address1'	=>	$params['address1'],
-				'address2'	=>	$params['address2'],
-				'city'		=>	$params['city'],
-				'state'		=>	$params['state'],
-				'postalCode'=>	$params['postcode'],
-				'country'	=>	$params['countrycode']
+	$contactRegistrant = new DomainContact();
+	$contactRegistrant 	->setNameFirst($params['firstname'])
+						->setNameMiddle($params['firstname'])
+						->setNameLast($params['lastname'])
+						->setOrganization($params['companyname'])
+						->setJobTitle($params['companyname'])
+						->setEmail($params['email'])
+						->setPhone($params['phonenumberformatted'])
+						->setAddressMailing(array(
+							'address1'	=>	$params['address1'],
+							'address2'	=>	$params['address2'],
+							'city'		=>	$params['city'],
+							'state'		=>	$params['state'],
+							'postalCode'=>	$params['postcode'],
+							'country'	=>	$params['countrycode']
+			));
+
+	$contactRest = new DomainContact();
+	$contactRest->setNameFirst($params['adminfirstname'])
+				->setNameMiddle($params['adminfirstname'])
+				->setNameLast($params['adminlastname'])
+				->setOrganization($params['admincompanyname'])
+				->setJobTitle($params['admincompanyname'])
+				->setEmail($params['adminemail'])
+				->setPhone($params['adminfullphonenumber'])
+				->setAddressMailing(array(
+					'address1'	=>	$params['adminaddress1'],
+					'address2'	=>	$params['adminaddress2'],
+					'city'		=>	$params['admincity'],
+					'state'		=>	$params['adminstate'],
+					'postalCode'=>	$params['adminpostcode'],
+					'country'	=>	$params['admincountry']
 			));
 
 	$nameServers = array();
@@ -94,25 +113,29 @@ function michal_RegisterDomain($params)
 		}
 	}
 
+	$row = DB::table('tbldomains')	->where('tbldomains.id','=',$params['domainid'])
+									->join('tblorders','tblorders.id','=','tbldomains.orderid')
+									->first();
+
 	$domainPurchase = new DomainPurchase();
 	$domainPurchase ->setDomain($params['domainname'])
 					->setConsent(array(
 						'agreementKeys'	=> $consent,
-						'agreedBy' 		=> $params['original']['model']->ip,
+						'agreedBy' 		=> $row->ipaddress,
 						'agreedAt' 		=> date("Y-m-d\TH:i:s\Z")
 					))
 					->setPeriod((int)$params['regperiod'])
 					->setNameServers($nameServers)
-					->setContactRegistrant($contact)
-					->setContactAdmin($contact)
-					->setContactTech($contact)
-					->setContactBilling($contact);
+					->setContactRegistrant($contactRegistrant)
+					->setContactAdmin($contactRest)
+					->setContactTech($contactRest)
+					->setContactBilling($contactRest);
 
 	$domain = json_encode($domainPurchase);
 
 	try
 	{
-		$api->post('/v1/domains/purchase',$domain,1);
+		$api->post('/v1/domains/purchase',$domain);
 	}
 	catch(Exception $ex)
 	{
@@ -134,7 +157,15 @@ function michal_GetNameServers($params)
 	{
 		return array('error' => $ex->getMessage());
 	}
-											
+	
+	$nameServers = array();
+
+	foreach($domainInfo->nameServers as $key => $val)
+	{
+		$nameServers['ns' . ($key+1)] = $val;
+	}
+
+	return $nameServers;											
 }
 
 function michal_SaveNameServers($params)
@@ -167,16 +198,17 @@ function michal_SaveNameServers($params)
 					->setRenewAuto($domainInfo->renewAuto);
 
 	$domain = json_encode($domainUpdate);
+
 	try
 	{
-		$api->patch('/v1/domains/'.$params['domainname'] ,$domain,1);
+		$a = $api->patch('/v1/domains/'.$params['domainname'] ,$domain);
 	}
 	catch(Exception $ex)
 	{
 		return array('error'	=>	$ex->getMessage());
 	}
 
-	
+	return 'success';
 }
 
 function michal_GetRegistrarLock($params)
@@ -185,13 +217,13 @@ function michal_GetRegistrarLock($params)
 
 	try
 	{
-		//$domainInfo = $api->get('/v1/domains/',$params['domainname']);
+		$domainInfo = $api->get('/v1/domains/',$params['domainname']);
 	}
 	catch(Exception $ex)
 	{
 		return array('error' => $ex->getMessage());
 	}
 
-	return $domainInfo->locked;
+	return $domainInfo->locked; 
 }
 
